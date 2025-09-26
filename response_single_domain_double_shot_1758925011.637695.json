@@ -1,0 +1,20 @@
+{
+  "strategy": "single_domain_double_shot",
+  "prompt_prefix": "-- Enable foreign keys\nPRAGMA foreign_keys = ON;\n\n-- Address table\nCREATE TABLE address (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    street TEXT NOT NULL,\n    city TEXT NOT NULL,\n    state TEXT NOT NULL,\n    zip_code TEXT NOT NULL  -- ZIPs may have leading 0s\n);\n\n-- Runner table\nCREATE TABLE runner (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    first_name TEXT NOT NULL,\n    last_name TEXT NOT NULL,\n    phone_number TEXT NOT NULL, -- Use TEXT to preserve formatting/leading zeros\n    age INTEGER NOT NULL,\n    gender TEXT NOT NULL CHECK (gender IN ('Male', 'Female')),\n    address_id INTEGER NOT NULL,\n    FOREIGN KEY (address_id) REFERENCES address(id)\n);\n\n-- Race table\nCREATE TABLE race (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    name VARCHAR(30) NOT NULL,\n    distance INTEGER NOT NULL,\n    date DATE NOT NULL,\n    elevation INTEGER NOT NULL,\n    address_id INTEGER NOT NULL,\n    FOREIGN KEY (address_id) REFERENCES address(id)\n);\n\n-- Registration table\nCREATE TABLE registration (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    runner_id INTEGER NOT NULL,\n    race_id INTEGER NOT NULL,\n    date DATE NOT NULL,\n    FOREIGN KEY (runner_id) REFERENCES runner(id),\n    FOREIGN KEY (race_id) REFERENCES race(id)\n);\n\n-- Shoe table\nCREATE TABLE shoe (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    runner_id INTEGER NOT NULL,\n    brand TEXT NOT NULL,\n    size REAL NOT NULL,  -- SQLite doesn't enforce DECIMAL precision\n    model TEXT NOT NULL,\n    year INTEGER NOT NULL,\n    purchase_date DATE NOT NULL,\n    FOREIGN KEY (runner_id) REFERENCES runner(id)\n);\n\n-- Race prize table\nCREATE TABLE race_prize (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    race_id INTEGER NOT NULL,\n    first_prize INTEGER NOT NULL,\n    second_prize INTEGER NOT NULL,\n    third_prize INTEGER NOT NULL,\n    FOREIGN KEY (race_id) REFERENCES race(id)\n);\n\n-- Race positions table\nCREATE TABLE race_positions (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    race_id INTEGER NOT NULL,\n    position INTEGER NOT NULL,\n    runner_id INTEGER NOT NULL,\n    race_time TIME NOT NULL,\n    FOREIGN KEY (race_id) REFERENCES race(id),\n    FOREIGN KEY (runner_id) REFERENCES runner(id)\n);\n Which race is the longest?  \nSELECT name, distance\nFROM race\nORDER BY distance DESC\nLIMIT 1;\n  Give me a sqlite select statement that answers the question. Only respond with sqlite syntax. If there is an error do not explain it!",
+  "questionResults": [
+    {
+      "question": "Who ran more than one race in a month?",
+      "sql": "\nSELECT runner.first_name, runner.last_name, COUNT(registration.id) AS race_count, strftime('%m-%Y', registration.date) AS month_year\nFROM registration\nJOIN runner ON registration.runner_id = runner.id\nGROUP BY runner.id, month_year\nHAVING race_count > 1;\n",
+      "queryRawResponse": "[('John', 'Doe', 2, '08-2025')]",
+      "friendlyResponse": "John Doe ran more than one race in August 2025.",
+      "error": "None"
+    },
+    {
+      "question": "How long before a race do most people register?",
+      "sql": "\nSELECT date(race.date, '-' || AVG(julianday(race.date) - julianday(registration.date)) || ' day') AS average_registration_lead_time\nFROM registration\nJOIN race ON registration.race_id = race.id\nGROUP BY race.id\nORDER BY AVG(julianday(race.date) - julianday(registration.date)) DESC\nLIMIT 1;\n",
+      "queryRawResponse": "[('2025-08-30',)]",
+      "friendlyResponse": "Most people register for races a few weeks to a few months in advance.",
+      "error": "None"
+    }
+  ]
+}

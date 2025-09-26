@@ -1,0 +1,48 @@
+{
+  "strategy": "zero_shot",
+  "prompt_prefix": "-- Enable foreign keys\nPRAGMA foreign_keys = ON;\n\n-- Address table\nCREATE TABLE address (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    street TEXT NOT NULL,\n    city TEXT NOT NULL,\n    state TEXT NOT NULL,\n    zip_code TEXT NOT NULL  -- ZIPs may have leading 0s\n);\n\n-- Runner table\nCREATE TABLE runner (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    first_name TEXT NOT NULL,\n    last_name TEXT NOT NULL,\n    phone_number TEXT NOT NULL, -- Use TEXT to preserve formatting/leading zeros\n    age INTEGER NOT NULL,\n    gender TEXT NOT NULL CHECK (gender IN ('Male', 'Female')),\n    address_id INTEGER NOT NULL,\n    FOREIGN KEY (address_id) REFERENCES address(id)\n);\n\n-- Race table\nCREATE TABLE race (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    name VARCHAR(30) NOT NULL,\n    distance INTEGER NOT NULL,\n    date DATE NOT NULL,\n    elevation INTEGER NOT NULL,\n    address_id INTEGER NOT NULL,\n    FOREIGN KEY (address_id) REFERENCES address(id)\n);\n\n-- Registration table\nCREATE TABLE registration (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    runner_id INTEGER NOT NULL,\n    race_id INTEGER NOT NULL,\n    date DATE NOT NULL,\n    FOREIGN KEY (runner_id) REFERENCES runner(id),\n    FOREIGN KEY (race_id) REFERENCES race(id)\n);\n\n-- Shoe table\nCREATE TABLE shoe (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    runner_id INTEGER NOT NULL,\n    brand TEXT NOT NULL,\n    size REAL NOT NULL,  -- SQLite doesn't enforce DECIMAL precision\n    model TEXT NOT NULL,\n    year INTEGER NOT NULL,\n    purchase_date DATE NOT NULL,\n    FOREIGN KEY (runner_id) REFERENCES runner(id)\n);\n\n-- Race prize table\nCREATE TABLE race_prize (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    race_id INTEGER NOT NULL,\n    first_prize INTEGER NOT NULL,\n    second_prize INTEGER NOT NULL,\n    third_prize INTEGER NOT NULL,\n    FOREIGN KEY (race_id) REFERENCES race(id)\n);\n\n-- Race positions table\nCREATE TABLE race_positions (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    race_id INTEGER NOT NULL,\n    position INTEGER NOT NULL,\n    runner_id INTEGER NOT NULL,\n    race_time TIME NOT NULL,\n    FOREIGN KEY (race_id) REFERENCES race(id),\n    FOREIGN KEY (runner_id) REFERENCES runner(id)\n);\n Give me a sqlite select statement that answers the question. Only respond with sqlite syntax. If there is an error do not explain it!",
+  "questionResults": [
+    {
+      "question": "Who signed up for a race but never ran it?",
+      "sql": "\nSELECT r.first_name, r.last_name\nFROM runner r\nJOIN registration reg ON r.id = reg.runner_id\nLEFT JOIN race_positions rp ON reg.race_id = rp.race_id AND r.id = rp.runner_id\nWHERE rp.runner_id IS NULL;\n",
+      "queryRawResponse": "[('John', 'Doe'), ('John', 'Doe')]",
+      "friendlyResponse": "John Doe signed up for the race but never ran it.",
+      "error": "None"
+    },
+    {
+      "question": "What shoe brands do winners wear?",
+      "sql": "\nSELECT DISTINCT shoe.brand\nFROM shoe\nJOIN race_positions ON shoe.runner_id = race_positions.runner_id\nWHERE race_positions.position = 1;\n",
+      "queryRawResponse": "[('Nike',), ('Asics',), ('New Balance',)]",
+      "friendlyResponse": "Winners often wear Nike, Asics, or New Balance.",
+      "error": "None"
+    },
+    {
+      "question": "Who runs with shoes over a year old?",
+      "sql": "\nSELECT DISTINCT r.first_name, r.last_name\nFROM runner r\nJOIN shoe s ON r.id = s.runner_id\nWHERE s.purchase_date < DATE('now', '-1 year');\n",
+      "queryRawResponse": "[('John', 'Doe'), ('Jane', 'Smith'), ('Emily', 'Davis'), ('Robert', 'Brown')]",
+      "friendlyResponse": "John, Jane, Emily, and Robert.",
+      "error": "None"
+    },
+    {
+      "question": "Who ran more than one race in a month?",
+      "sql": "\nSELECT runner.first_name, runner.last_name\nFROM runner\nJOIN registration ON runner.id = registration.runner_id\nGROUP BY runner.id, strftime('%m-%Y', registration.date)\nHAVING COUNT(DISTINCT registration.race_id) > 1;\n",
+      "queryRawResponse": "[('John', 'Doe')]",
+      "friendlyResponse": "John Doe ran more than one race in a month.",
+      "error": "None"
+    },
+    {
+      "question": "How long before a race do most people register?How old are people on average who run races?",
+      "sql": "\nSELECT AVG(julianday(race.date) - julianday(registration.date)) AS average_days_before_race\nFROM registration\nJOIN race ON registration.race_id = race.id;\n\nSELECT AVG(age) AS average_age_of_runners\nFROM runner;\n",
+      "queryRawResponse": "[('John', 'Doe')]",
+      "friendlyResponse": "John Doe ran more than one race in a month.",
+      "error": "You can only execute one statement at a time."
+    },
+    {
+      "question": "How many people are signed up for the next race?",
+      "sql": "\nSELECT COUNT(DISTINCT runner_id) \nFROM registration \nWHERE race_id = (SELECT id FROM race WHERE date = (SELECT MIN(date) FROM race WHERE date >= DATE('now')));\n",
+      "queryRawResponse": "[(2,)]",
+      "friendlyResponse": "Two people are signed up for the next race.",
+      "error": "None"
+    }
+  ]
+}
